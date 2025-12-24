@@ -1,80 +1,89 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
 
 export default function Sales() {
+  const API = "http://localhost:8080"; // Backend root
+
   const [rows, setRows] = useState([
-    { barcode: "", name: "", quantity: 1, price: "", suggestions: [] }
+    { productId: null, barcode: "", name: "", quantity: 1, salePrice: "", suggestions: [] }
   ]);
 
-  const API = "http://localhost:8080";
-
-  // Handle input changes
+  // --------------------------------------------
+  //  Handle field changes
+  // --------------------------------------------
   const handleChange = async (index, field, value) => {
     const updated = [...rows];
     updated[index][field] = value;
 
-    // If typing name → show autocomplete
-    if (field === "name" && value.trim() !== "") {
+    // SEARCH by name or barcode
+    if ((field === "name" || field === "barcode") && value.trim() !== "") {
       try {
-        const res = await axios.get(`${API}/products/search?q=${value}`);
+        const res = await axios.get(
+          `${API}/products/search?q=${encodeURIComponent(value)}`
+        );
+
         updated[index].suggestions = res.data || [];
-      } catch (e) {
+      } catch (err) {
+        console.error("Search error:", err);
         updated[index].suggestions = [];
       }
     }
 
-    // If barcode typed → search by barcode
-    if (field === "barcode" && value.length > 2) {
-      try {
-        const res = await axios.get(`${API}/products/search?q=${value}`);
-        const match = res.data && res.data.length ? res.data[0] : null;
-
-        if (match) {
-          updated[index].name = match.name;
-          updated[index].price = match.markedPrice || match.marked_price || "";
-        }
-      } catch (err) {}
-    }
-
     setRows(updated);
   };
 
-  // When selecting item from suggestions
-  const selectSuggestion = (index, item) => {
+  // --------------------------------------------
+  //  When user selects a suggested product
+  // --------------------------------------------
+  const selectSuggestion = (index, product) => {
     const updated = [...rows];
-    updated[index].name = item.name;
-    updated[index].price = item.markedPrice || item.marked_price || "";
-    updated[index].suggestions = [];
+
+    updated[index].productId = product.id;           // ✅ Save productId
+    updated[index].name = product.name;              // Show name
+    updated[index].salePrice = product.sellingPrice; // Default selling price
+    updated[index].suggestions = [];                 // Clear suggestions
+
     setRows(updated);
   };
 
-  // Add new empty row
+  // --------------------------------------------
+  //  Add new row
+  // --------------------------------------------
   const addRow = () => {
-    setRows([...rows, { barcode: "", name: "", quantity: 1, price: "", suggestions: [] }]);
+    setRows([
+      ...rows,
+      { productId: null, barcode: "", name: "", quantity: 1, salePrice: "", suggestions: [] }
+    ]);
   };
 
-  // Remove selected row
-  const removeRow = (index) => {
-    setRows(rows.filter((_, i) => i !== index));
+  // --------------------------------------------
+  //  Remove a row
+  // --------------------------------------------
+  const removeRow = (i) => {
+    setRows(rows.filter((_, idx) => idx !== i));
   };
 
-  // Submit bulk sale
-  const handleSubmit = async () => {
+  // --------------------------------------------
+  //  Submit Sales
+  // --------------------------------------------
+  const submitSales = async () => {
     const payload = rows.map((r) => ({
-      name: r.name,
-      quantity: parseInt(r.quantity),
-      sale_price: parseFloat(r.price)
+      productId: r.productId,
+      quantity: Number(r.quantity),
+      salePrice: Number(r.salePrice),
     }));
 
     try {
-      const res = await axios.post(`${API}/sales/bulk`, payload, {
-        headers: { "Content-Type": "application/json" }
+      await axios.post(`${API}/sales/bulk`, payload, {
+        headers: { "Content-Type": "application/json" },
       });
 
-      alert("Sale successful!");
+      alert("Sales successfully recorded!");
 
-      // Reset form
-      setRows([{ barcode: "", name: "", quantity: 1, price: "", suggestions: [] }]);
+      // Reset
+      setRows([
+        { productId: null, barcode: "", name: "", quantity: 1, salePrice: "", suggestions: [] }
+      ]);
 
     } catch (err) {
       alert("Error: " + (err.response?.data || err.message));
@@ -87,37 +96,35 @@ export default function Sales() {
 
       <div className="space-y-6">
         {rows.map((row, index) => (
-          <div key={index} className="bg-white p-4 rounded-lg shadow relative">
+          <div key={index} className="bg-white p-4 rounded shadow relative">
 
-            {/* Barcode */}
+            {/* Barcode field */}
             <input
-              type="text"
-              className="border p-2 rounded w-full mb-3"
-              placeholder="Scan Barcode or enter manually"
+              className="border p-2 w-full rounded mb-3"
+              placeholder="Scan barcode"
               value={row.barcode}
               onChange={(e) => handleChange(index, "barcode", e.target.value)}
             />
 
-            {/* Name Input + Autocomplete */}
+            {/* Name field with suggestions */}
             <div className="relative">
               <input
-                type="text"
-                className="border p-2 rounded w-full"
-                placeholder="Item name"
+                className="border p-2 w-full rounded"
+                placeholder="Search item name"
                 value={row.name}
                 onChange={(e) => handleChange(index, "name", e.target.value)}
               />
 
-              {/* Suggestions Dropdown */}
+              {/* Suggestion Dropdown */}
               {row.suggestions.length > 0 && (
-                <ul className="absolute left-0 right-0 bg-white shadow-lg border max-h-40 overflow-y-auto z-10">
-                  {row.suggestions.map((item, i) => (
+                <ul className="absolute bg-white w-full shadow max-h-48 overflow-y-auto z-10 border rounded">
+                  {row.suggestions.map((p) => (
                     <li
-                      key={i}
+                      key={p.id}
                       className="p-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => selectSuggestion(index, item)}
+                      onClick={() => selectSuggestion(index, p)}
                     >
-                      {item.name}
+                      {p.name} — Rs. {p.sellingPrice}
                     </li>
                   ))}
                 </ul>
@@ -125,62 +132,56 @@ export default function Sales() {
             </div>
 
             {/* Quantity + Price */}
-            <div className="flex gap-4 mt-3">
-
+            <div className="flex gap-3 mt-3">
               <input
                 type="number"
-                className="border p-2 rounded w-32"
-                value={row.quantity}
                 min={1}
+                className="border p-2 rounded w-24"
+                value={row.quantity}
                 onChange={(e) => handleChange(index, "quantity", e.target.value)}
               />
 
               <input
                 type="number"
-                className="border p-2 rounded w-32"
                 step="0.01"
-                placeholder="Price"
-                value={row.price}
-                onChange={(e) => handleChange(index, "price", e.target.value)}
+                className="border p-2 rounded w-32"
+                placeholder="Sale Price"
+                value={row.salePrice}
+                onChange={(e) => handleChange(index, "salePrice", e.target.value)}
               />
 
-              {/* Calculated total */}
-              <div className="p-2 text-lg font-semibold text-gray-700">
-                Rs. {(row.quantity * row.price || 0).toFixed(2)}
+              <div className="p-2 font-semibold">
+                Rs {(row.quantity * row.salePrice || 0).toFixed(2)}
               </div>
             </div>
 
-            {/* Remove Row Button */}
+            {/* Remove row */}
             {rows.length > 1 && (
               <button
-                onClick={() => removeRow(index)}
                 className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded"
+                onClick={() => removeRow(index)}
               >
                 X
               </button>
             )}
-
           </div>
         ))}
 
-        {/* Add New Row */}
+        {/* Add new row */}
         <button
           onClick={addRow}
-          className="bg-blue-600 text-white px-4 py-2 rounded shadow"
+          className="bg-blue-600 text-white px-4 py-2 rounded"
         >
           + Add Item
         </button>
 
-        {/* Submit Button */}
-        <div>
-          <button
-            onClick={handleSubmit}
-            className="bg-green-600 text-white px-6 py-3 rounded shadow text-lg"
-          >
-            Submit Sale
-          </button>
-        </div>
-
+        {/* Submit */}
+        <button
+          onClick={submitSales}
+          className="bg-green-600 text-white px-6 py-3 rounded text-lg"
+        >
+          Submit Sale
+        </button>
       </div>
     </div>
   );
