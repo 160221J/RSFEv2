@@ -15,6 +15,7 @@ export default function MainLayout() {
           <Link to="/withdrawals" className="hover:text-blue-600">Withdrawals</Link>
           <Link to="/profit" className="hover:text-blue-600">Daily Profit</Link>
           <Link to="/settings" className="hover:text-blue-600">Settings</Link>
+          <Link to="/stocks/arrival">Stock Arrival</Link>
         </nav>
       </aside>
 

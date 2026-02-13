@@ -8,6 +8,8 @@ import StockManagement from "./pages/StockManagement";
 import Withdrawals from "./pages/Withdrawals";
 import DailyProfit from "./pages/DailyProfit";
 import Settings from "./pages/Settings";
+import StockArrival from "./pages/StockArrival";
+
 
 export default function App() {
   return (
@@ -20,6 +22,7 @@ export default function App() {
           <Route path="/withdrawals" element={<Withdrawals />} />
           <Route path="/profit" element={<DailyProfit />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/stocks/arrival" element={<StockArrival />} />
         </Route>
       </Routes>
     </BrowserRouter>
